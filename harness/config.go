@@ -182,30 +182,32 @@ var phaseNames = func() []string {
 
 // Step is a single benchmark step. Exactly one step-type field must be non-nil.
 type Step struct {
-	ID             string              `yaml:"id"`
-	Optional       bool                `yaml:"optional"`
-	Noop           *NoopStep           `yaml:"noop"`
-	Wait           *WaitStep           `yaml:"wait"`
-	Kind           *KindStep           `yaml:"kind"`
-	KindDelete     *KindDeleteStep     `yaml:"kind-delete"`
-	KindLoad       *KindLoadStep       `yaml:"kind-load"`
-	Kubectl        *KubectlStep        `yaml:"kubectl"`
-	WaitPods       *WaitPodsStep       `yaml:"wait-pods"`
-	WatchJob       *WatchJobStep       `yaml:"watch-job"`
-	WriteIni       *WriteIniStep       `yaml:"write-ini"`
-	EsDocCount     *EsDocCountStep     `yaml:"es-doc-count"`
-	EsLogSpan      *EsLogSpanStep      `yaml:"es-log-span"`
-	EsAgg          *EsAggStep          `yaml:"es-agg"`
-	EsTsv          *EsTsvStep          `yaml:"es-tsv"`
-	EsAgentMetrics *EsAgentMetricsStep `yaml:"elastic-agent-metrics"`
-	EsMetrics      *EsMetricsStep      `yaml:"elasticsearch-metrics"`
-	StackVersions  *StackVersionsStep  `yaml:"stack-versions"`
-	TsvDerive      *TsvDeriveStep      `yaml:"tsv-derive"`
-	Chart          *ChartStep          `yaml:"chart"`
-	Shell          *ShellStep          `yaml:"shell"`
-	OpenTofu       *OpenTofuStep       `yaml:"opentofu"`
-	Ansible        *AnsibleStep        `yaml:"ansible"`
-	FleetDiag      *FleetDiagStep      `yaml:"fleet-agent-diagnostics"`
+	ID              string               `yaml:"id"`
+	Optional        bool                 `yaml:"optional"`
+	Noop            *NoopStep            `yaml:"noop"`
+	Wait            *WaitStep            `yaml:"wait"`
+	Kind            *KindStep            `yaml:"kind"`
+	KindDelete      *KindDeleteStep      `yaml:"kind-delete"`
+	KindLoad        *KindLoadStep        `yaml:"kind-load"`
+	Kubectl         *KubectlStep         `yaml:"kubectl"`
+	WaitPods        *WaitPodsStep        `yaml:"wait-pods"`
+	WatchJob        *WatchJobStep        `yaml:"watch-job"`
+	WriteIni        *WriteIniStep        `yaml:"write-ini"`
+	EsDocCount      *EsDocCountStep      `yaml:"es-doc-count"`
+	EsLogSpan       *EsLogSpanStep       `yaml:"es-log-span"`
+	EsAgg           *EsAggStep           `yaml:"es-agg"`
+	EsTsv           *EsTsvStep           `yaml:"es-tsv"`
+	EsAgentMetrics  *EsAgentMetricsStep  `yaml:"elastic-agent-metrics"`
+	EsMetrics       *EsMetricsStep       `yaml:"elasticsearch-metrics"`
+	FilebeatWait    *FilebeatWaitStep    `yaml:"filebeat-wait"`
+	FilebeatMetrics *FilebeatMetricsStep `yaml:"filebeat-metrics"`
+	StackVersions   *StackVersionsStep   `yaml:"stack-versions"`
+	TsvDerive       *TsvDeriveStep       `yaml:"tsv-derive"`
+	Chart           *ChartStep           `yaml:"chart"`
+	Shell           *ShellStep           `yaml:"shell"`
+	OpenTofu        *OpenTofuStep        `yaml:"opentofu"`
+	Ansible         *AnsibleStep         `yaml:"ansible"`
+	FleetDiag       *FleetDiagStep       `yaml:"fleet-agent-diagnostics"`
 }
 
 func (s *Step) typeName() string {
@@ -240,6 +242,10 @@ func (s *Step) typeName() string {
 		return "elastic-agent-metrics"
 	case s.EsMetrics != nil:
 		return "elasticsearch-metrics"
+	case s.FilebeatWait != nil:
+		return "filebeat-wait"
+	case s.FilebeatMetrics != nil:
+		return "filebeat-metrics"
 	case s.StackVersions != nil:
 		return "stack-versions"
 	case s.TsvDerive != nil:
@@ -404,6 +410,32 @@ type DashboardSpec struct {
 	Width   int      `yaml:"width"`   // default 1600
 	Height  int      `yaml:"height"`  // default 2400
 	Timeout Duration `yaml:"timeout"` // default 10m
+}
+
+// FilebeatWaitStep polls Filebeat's legacy stack-monitoring documents until a
+// sample from a Filebeat process started after Since reports
+// libbeat.output.events.acked >= max(Expected, 1). With Expected unset it
+// confirms that metrics arrive and the output is sending. Index defaults to
+// .monitoring-beats-*. Outputs: reachedAt (the matching sample's timestamp,
+// RFC3339Nano), acked, confirmedAt.
+type FilebeatWaitStep struct {
+	Index    string            `yaml:"index"`
+	Since    string            `yaml:"since"`
+	Filter   map[string]string `yaml:"filter"`
+	Expected VarInt            `yaml:"expected"`
+	Timeout  Duration          `yaml:"timeout"`
+}
+
+// FilebeatMetricsStep writes Filebeat CPU, memory, and output event-rate
+// TSVs and charts from legacy stack-monitoring documents. Samples at or after
+// Until are dropped, so passing the filebeat-wait reachedAt excludes the
+// partial final interval and leaves constant-rate samples.
+type FilebeatMetricsStep struct {
+	Index     string            `yaml:"index"`
+	Since     string            `yaml:"since"`
+	Until     string            `yaml:"until"`
+	OutputDir string            `yaml:"output_dir"`
+	Filter    map[string]string `yaml:"filter"`
 }
 
 // EsMetricsStep collects Elasticsearch node stats (indexing rate, CPU, heap)
@@ -703,6 +735,20 @@ func collectStepRefs(step Step, add func(string)) {
 		add(step.EsMetrics.OutputDir)
 		add(step.EsMetrics.DataStreamIndex)
 		for _, v := range step.EsMetrics.Filter {
+			add(v)
+		}
+	case step.FilebeatWait != nil:
+		add(step.FilebeatWait.Index)
+		add(step.FilebeatWait.Since)
+		for _, v := range step.FilebeatWait.Filter {
+			add(v)
+		}
+	case step.FilebeatMetrics != nil:
+		add(step.FilebeatMetrics.Index)
+		add(step.FilebeatMetrics.Since)
+		add(step.FilebeatMetrics.Until)
+		add(step.FilebeatMetrics.OutputDir)
+		for _, v := range step.FilebeatMetrics.Filter {
 			add(v)
 		}
 	case step.EsTsv != nil:

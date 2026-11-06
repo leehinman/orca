@@ -226,6 +226,8 @@ func registerFactories(r *harness.Runner, cfg *harness.Config) {
 	r.Register("es-tsv", steps.NewEsTsvFactory(cfg.Elasticsearch))
 	r.Register("elastic-agent-metrics", steps.NewEsAgentMetricsFactory(cfg.Elasticsearch, cfg.Kibana))
 	r.Register("elasticsearch-metrics", steps.NewEsMetricsFactory(cfg.Elasticsearch))
+	r.Register("filebeat-wait", steps.NewFilebeatWaitFactory(cfg.Elasticsearch))
+	r.Register("filebeat-metrics", steps.NewFilebeatMetricsFactory(cfg.Elasticsearch))
 	r.Register("stack-versions", steps.NewStackVersionsFactory(cfg.Elasticsearch, cfg.Kibana))
 	r.Register("fleet-agent-diagnostics", steps.NewFleetDiagFactory(cfg.Kibana))
 }

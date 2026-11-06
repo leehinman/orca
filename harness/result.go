@@ -21,6 +21,32 @@ type BenchmarkResult struct {
 	Metrics      []MetricResult        `json:"metrics,omitempty"`
 	AgentMetrics []AgentMetricsSummary `json:"agent_metrics,omitempty"`
 	EsMetrics    []EsMetricsSummary    `json:"elasticsearch_metrics,omitempty"`
+
+	FilebeatMetrics []FilebeatMetricsSummary `json:"filebeat_metrics,omitempty"`
+}
+
+// FilebeatMetricsSummary is the structured output of one filebeat-metrics
+// step, stored in state as JSON under steps.<id>.summary. Events is the
+// cumulative acked count at the last kept sample.
+type FilebeatMetricsSummary struct {
+	Samples         int     `json:"samples"`
+	WindowSec       float64 `json:"window_sec"`
+	Events          int64   `json:"events"`
+	EventsPerSecAvg float64 `json:"events_per_sec_avg"`
+	EventsPerSecMax float64 `json:"events_per_sec_max"`
+	CPUAvg          float64 `json:"cpu_avg_pct"`
+	CPUMax          float64 `json:"cpu_max_pct"`
+	RSSAvg          float64 `json:"rss_avg_bytes"`
+	RSSMax          float64 `json:"rss_max_bytes"`
+}
+
+func (s FilebeatMetricsSummary) print(w io.Writer) {
+	fmt.Fprintln(w, "\nfilebeat:")
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(tw, "  samples\tevents\tevents/s avg\tevents/s max\tcpu avg\tcpu max\trss avg\trss max")
+	fmt.Fprintf(tw, "  %d\t%d\t%.1f\t%.1f\t%.1f%%\t%.1f%%\t%s\t%s\n",
+		s.Samples, s.Events, s.EventsPerSecAvg, s.EventsPerSecMax, s.CPUAvg, s.CPUMax, formatBytes(s.RSSAvg), formatBytes(s.RSSMax))
+	tw.Flush() //nolint:errcheck
 }
 
 // StackVersions is the structured output of one stack-versions step, stored
@@ -255,6 +281,9 @@ func (r *BenchmarkResult) Print(w io.Writer) {
 	for _, em := range r.EsMetrics {
 		em.print(w)
 	}
+	for _, fm := range r.FilebeatMetrics {
+		fm.print(w)
+	}
 }
 
 func (s StackVersions) print(w io.Writer) {
@@ -485,6 +514,15 @@ func (cfg *Config) BuildResult(state *State) BenchmarkResult {
 				var em EsMetricsSummary
 				if err := json.Unmarshal([]byte(v), &em); err == nil {
 					res.EsMetrics = append(res.EsMetrics, em)
+				}
+			}
+		}
+
+		if step.FilebeatMetrics != nil && step.ID != "" {
+			if v, _ := state.Resolve("${steps." + step.ID + ".summary}"); v != "" {
+				var fm FilebeatMetricsSummary
+				if err := json.Unmarshal([]byte(v), &fm); err == nil {
+					res.FilebeatMetrics = append(res.FilebeatMetrics, fm)
 				}
 			}
 		}
